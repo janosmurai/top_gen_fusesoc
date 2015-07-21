@@ -77,8 +77,6 @@ def writeToFile(output):
     f.write(output)
     f.close()
 
-# cica
-
 
 
 
