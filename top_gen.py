@@ -12,11 +12,11 @@ from pyverilog.ast_code_generator.codegen import ASTCodeGenerator, Instance, Por
 import sys
 import os
 
+
 class IPNode:
     parameters = []
     ports = []
     name = ""
-    rank = ""
     connections_to_file = []
     val = ""
 
@@ -43,11 +43,12 @@ class IPNode:
             self.findParameters(child, lst)
         return lst
 
-    def instantiate(self, instanceName):
+    def instantiate(self, instanceName, rank):
+        val = ""
         inst = Instance(self.name, instanceName, self.portlist, self.paramlist)
         for line in inst.portlist:
             if (line.argname.name != "wb_clk") & (line.argname.name != "wb_rst") & line.argname.name.startswith("wb"):
-                if moduleNode.rank == "slave":
+                if rank == "slave":
                     if line.argname.name.endswith("i"):
                         line.argname.name = "wb_m2s_{modul_name}_{port}".format(modul_name=self.name,
                                                                                 port=line.argname.name[3:-2])
@@ -63,12 +64,14 @@ class IPNode:
                                                                                 port=line.argname.name[3:-2])
         # Call the code generator
         cg = ASTCodeGenerator()
-        moduleNode.val = cg.visit(inst)
-        moduleNode.val += "\n\n"
-        return moduleNode.val
+        val = cg.visit(inst)
+        val += "\n\n"
+        print(rank)
+        print(val)
+        return val
 
 def writeToFile(output):
-    f = open('/home/murai/openrisc/orpsoc-cores-ng/systems/logsys_spartan_6/top_generating/top.v', 'w+r')
+    f = open('/home/murai/openrisc/orpsoc-cores-ng/systems/logsys_spartan_6/top_generating/top.v', 'r+')
     if (f.readlines() != ""):
         f.write("")
     f.close()
@@ -121,7 +124,6 @@ def findTopGen(tr):
 
 def top_gen_main():
     print("called")
-    i = 0
     source_list = []
     output = ""
     # Open configuration file
@@ -130,15 +132,12 @@ def top_gen_main():
     source_list = lookForSource(handleConfFile.module_name)
     print(source_list)
     # Instantiation from the source list
-    for source in source_list:
-        codeParser = VerilogCodeParser(filelist=[source])
+    for source in range(len(source_list)):
+        codeParser = VerilogCodeParser(filelist=[source_list[source]])
         sAst = codeParser.parse()
         moduleNode = findTopGen(sAst)
-    #     TopGen.rank = handleConfFile.handleConfFile.rank.pop()
-    #     output += moduleNode.instantiate(handleConfFile.handleConfFile.instantiation_name[i])
-    #     i += 1
-    # # Create the top.v file
-    # writeToFile(output)
-    # pass
+        output += moduleNode.instantiate(handleConfFile.instantiation_name[source], handleConfFile.rank[source])
+    # Create the top.v file
+    writeToFile(output)
 
 top_gen_main()
