@@ -89,6 +89,9 @@ class Repo_clone:
 
         Repo.clone_from("https://github.com/{user}/{repo}".format(user=Repo_clone.user, repo=Repo_clone.repo),
                         "/home/murai/openrisc/top_gen_fusesoc/git_test/{dir}".format(dir=Repo_clone.repo))
+                        
+        #TODO: Ha nem találja git-en meglehessen adni URL-t
+        #TODO: AZ add files to source list részt külön fv-be kirakni
 
         # Add files to source list
         for root, dirs, files in os.walk("/home/murai/openrisc/top_gen_fusesoc/git_test/{dir}".format(dir=Repo_clone.repo), topdown=False, onerror=None, followlinks=False):
@@ -108,6 +111,8 @@ class Repo_clone:
         #                  '--password', 'orpsoc',
         #                  repo_path,
         #                  "/home/murai/openrisc/top_gen_fusesoc/git_test/{dir}".format(dir=self.repo_name)]).run()
+        
+        #TODO: Ha a repo nem található akkor kérjen URL-t, vagy skippelje ezt a core fájlt. Nyilván az utólag megadott URL a cloneFromURL-t hívja meg!
 
         # Add files to source list
         for root, dirs, files in os.walk("/home/murai/openrisc/top_gen_fusesoc/git_test/{dir}".format(dir=self.repo_name), topdown=False, onerror=None, followlinks=False):
@@ -147,6 +152,8 @@ class Repo_clone:
         else:
             # Unknown file type
             raise RuntimeError("Unknown file type '" + self.filetype + "' in [provider] section")
+            
+        #TODO: Ha nem találja lehessen újat megadni, vagy skippelni a core fájlt
 
         # Add files to source list
         for root, dirs, files in os.walk(path_to_copy, topdown=False, onerror=None, followlinks=False):
