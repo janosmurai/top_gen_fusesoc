@@ -18,14 +18,18 @@ class IPNode:
     name = ""
     connections_to_file = []
     val = ""
-    
+
     def __init__(self, moduleNode):
 
         self.name = moduleNode.name
         self.portlist = []
         self.paramlist = []
         for port in moduleNode.portlist.ports:
-            self.portlist.append(PortArg(Identifier(port.first.name), Identifier(port.first.name)))
+            try:
+                self.portlist.append(PortArg(Identifier(port.first.name), Identifier(port.first.name)))
+            #The port does not have first attribute, but it still contains the name.
+            except AttributeError:
+                self.portlist.append(PortArg(Identifier(port.name), Identifier(port.name)))
         for item in moduleNode.paramlist.params:
             self.findParameters(item, self.parameters)
         for item in moduleNode.items:
@@ -45,6 +49,7 @@ class IPNode:
     def instantiate(self, instanceName, rank):
         val = ""
         inst = Instance(self.name, instanceName, self.portlist, self.paramlist)
+
         for line in inst.portlist:
             if (line.argname.name != "wb_clk") & (line.argname.name != "wb_rst") & line.argname.name.startswith("wb"):
                 if rank == "slave":
@@ -70,7 +75,7 @@ class IPNode:
         return val
 
 def writeToFile(output):
-    f = open('/home/murai/openrisc/orpsoc-cores-ng/systems/logsys_spartan_6/top_generating/top.v', 'r+')
+    f = open('/home/murai/openrisc/orpsoc-cores-ng/systems/logsys_spartan_6/top_generating/top.v', 'w+')
     if (f.readlines() != ""):
         f.write("")
     f.close()
@@ -85,30 +90,45 @@ def writeToFile(output):
 def lookForSource(name):
     source_list = []
     core_exist = False
+    source_exist = False
+    iter_for_inst_rank_clear = 0
     for source in name:
         # Look for source file
-        for file in os.listdir(
-                "/home/murai/openrisc/orpsoc-cores-ng/cores"):  # TODO: The path comes from the fusesoc.conf file
+        for file in os.listdir("/home/murai/openrisc/orpsoc-cores-ng/cores"):  # TODO: The path comes from the fusesoc.conf file
             if file == source:
                 core_exist = True
                 break
             else:
                 core_exist = False
 
-        if core_exist == True:
+
+        if core_exist:
             # .v file -> use it immediately
             # .core file -> look for repositories
             for file in os.listdir("/home/murai/openrisc/orpsoc-cores-ng/cores/" + source):
                 if file.endswith(".v"):
                     source_list.append("/home/murai/openrisc/orpsoc-cores-ng/cores/" + source + "/" + source + ".v")
+                    source_exist = True
                 elif file.endswith(".core"):
                     topgen.repo_clone.Repo_clone("/home/murai/openrisc/orpsoc-cores-ng/cores/" + source + "/" + file)
                     for element in topgen.repo_clone.Repo_clone.source_list:
                         source_list.append(element)
                     topgen.repo_clone.Repo_clone.source_list = []
-                else:
-                    print("Neither core file nor source files exist!")
-            core_exist = False
+                    source_exist = True
+        else:
+            print(source + ": No such core.")
+
+        if not source_exist:
+            print(source + ": Neither .core file nor .v files exist!")
+
+
+        #Delete the parameters if we couldn't find the source
+        if not source_exist or not core_exist:
+            del topgen.handleConfFile.instantiation_name[iter_for_inst_rank_clear]
+            del topgen.handleConfFile.rank[iter_for_inst_rank_clear]
+
+        iter_for_inst_rank_clear += 1
+
     return source_list
 
 
@@ -122,7 +142,6 @@ def findTopGen(tr):
 
 
 def top_gen_main():
-    print("called")
     source_list = []
     output = ""
     # Open configuration file
@@ -138,5 +157,3 @@ def top_gen_main():
         output += moduleNode.instantiate(topgen.handleConfFile.instantiation_name[source], topgen.handleConfFile.rank[source])
     # Create the top.v file
     writeToFile(output)
-
-top_gen_main()

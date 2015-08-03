@@ -9,10 +9,13 @@ from git import Repo
 import os
 import sys
 import shutil
+import re
+from fusesoc.utils import Launcher
 
 ##########################################################################
 # Not working if the top module's name is not equal with the core's name #
 ##########################################################################
+
 
 class Repo_clone:
     name = ""
@@ -87,11 +90,20 @@ class Repo_clone:
                 shutil.rmtree("/home/murai/openrisc/top_gen_fusesoc/git_test/{dir}".format(dir=Repo_clone.repo))
 
 
-        Repo.clone_from("https://github.com/{user}/{repo}".format(user=Repo_clone.user, repo=Repo_clone.repo),
-                        "/home/murai/openrisc/top_gen_fusesoc/git_test/{dir}".format(dir=Repo_clone.repo))
-                        
-        #TODO: Ha nem találja git-en meglehessen adni URL-t
-        #TODO: AZ add files to source list részt külön fv-be kirakni
+        try:
+            Repo.clone_from("https://github.com/{user}/{repo}".format(user=Repo_clone.user, repo=Repo_clone.repo),
+                            "/home/murai/openrisc/top_gen_fusesoc/git_test/{dir}".format(dir=Repo_clone.repo))
+        except:
+            is_manual_url = input("We couldn't find the source files defined in the " + Repo_clone.repo + " core file.\n Would you like to add the URL manually? (y/n)\n")
+            if re.match(r"[yY][eE][sS]", is_manual_url) or is_manual_url == "y":
+                manual_url = input("Please add the URL: ")
+                try:
+                    Repo.clone_from(manual_url, "/home/murai/openrisc/top_gen_fusesoc/git_test/{dir}".format(dir=Repo_clone.repo))
+                except:
+                    print("We couldn't find the source files.\nThe core will be skipped")
+            else:
+                print("We skipped the " + Repo_clone.repo + " core. Please fix the top gen config and .core files to make this core work")
+
 
         # Add files to source list
         for root, dirs, files in os.walk("/home/murai/openrisc/top_gen_fusesoc/git_test/{dir}".format(dir=Repo_clone.repo), topdown=False, onerror=None, followlinks=False):
@@ -105,14 +117,29 @@ class Repo_clone:
             self.repo_name + '/' + self.repo_name + '/' + \
             self.repo_root
 
-        # Launcher('svn', ['co', '-q', '--no-auth-cache',
-        #                  '-r', self.revision,
-        #                  '--username', 'orpsoc',
-        #                  '--password', 'orpsoc',
-        #                  repo_path,
-        #                  "/home/murai/openrisc/top_gen_fusesoc/git_test/{dir}".format(dir=self.repo_name)]).run()
-        
-        #TODO: Ha a repo nem található akkor kérjen URL-t, vagy skippelje ezt a core fájlt. Nyilván az utólag megadott URL a cloneFromURL-t hívja meg!
+        try:
+            Launcher('svn', ['co', '-q', '--no-auth-cache',
+                             '-r', self.revision,
+                             '--username', 'orpsoc',
+                             '--password', 'orpsoc',
+                             repo_path,
+                             "/home/murai/openrisc/top_gen_fusesoc/git_test/{dir}".format(dir=self.repo_name)]).run()
+        except:
+            is_manual_url = input("We couldn't find the source files defined in the " + self.repo_name + " core file.\n Would you like to add the URL manually? (y/n)\n")
+            if re.match(r"[yY][eE][sS]", is_manual_url) or is_manual_url == "y":
+                manual_url = input("Please add the URL: ")
+                try:
+                    Launcher('svn', ['co', '-q', '--no-auth-cache',
+                             '-r', self.revision,
+                             '--username', 'orpsoc',
+                             '--password', 'orpsoc',
+                             manual_url,
+                             "/home/murai/openrisc/top_gen_fusesoc/git_test/{dir}".format(dir=self.repo_name)]).run()
+                except:
+                    print("We couldn't find the source files.\nThe core will be skipped.")
+            else:
+                print("We skipped the " + Repo_clone.repo + " core. Please fix the top gen config and .core files to make this core work")
+
 
         # Add files to source list
         for root, dirs, files in os.walk("/home/murai/openrisc/top_gen_fusesoc/git_test/{dir}".format(dir=self.repo_name), topdown=False, onerror=None, followlinks=False):
@@ -152,7 +179,7 @@ class Repo_clone:
         else:
             # Unknown file type
             raise RuntimeError("Unknown file type '" + self.filetype + "' in [provider] section")
-            
+
         #TODO: Ha nem találja lehessen újat megadni, vagy skippelni a core fájlt
 
         # Add files to source list
