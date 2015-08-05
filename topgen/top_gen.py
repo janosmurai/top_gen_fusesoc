@@ -10,8 +10,6 @@ from pyverilog.vparser.parser import VerilogCodeParser
 from pyverilog.vparser.ast import ModuleDef, Parameter, Identifier, ParamArg, PortArg, Instance
 from pyverilog.ast_code_generator.codegen import ASTCodeGenerator
 
-
-
 class IPNode:
     parameters = []
     ports = []
@@ -74,62 +72,89 @@ class IPNode:
         print(val)
         return val
 
-def writeToFile(output):
-    f = open('/home/murai/openrisc/orpsoc-cores-ng/systems/logsys_spartan_6/top_generating/top.v', 'w+')
+
+
+def writeToFile(output, top_gen_output_path, top_modul_name):
+    output_path = ""
+    for element in top_gen_output_path:
+        output_path += element + "/"
+
+    f = open(output_path + top_modul_name, 'w+')
     if (f.readlines() != ""):
         f.write("")
     f.close()
 
-    f = open('/home/murai/openrisc/orpsoc-cores-ng/systems/logsys_spartan_6/top_generating/top.v', 'a')
+    f = open(output_path + top_modul_name, 'a')
     f.write(output)
     f.close()
 
+class SourcePreparations(object):
 
-
-
-def lookForSource(name):
+    system_path = ""
+    core_path = ""
     source_list = []
-    core_exist = False
-    source_exist = False
-    iter_for_inst_rank_clear = 0
-    for source in name:
-        # Look for source file
-        for file in os.listdir("/home/murai/openrisc/orpsoc-cores-ng/cores"):  # TODO: The path comes from the fusesoc.conf file
-            if file == source:
-                core_exist = True
-                break
+
+    def __init__(self, name):
+        self.name = name
+        self.setEnvironment()
+        self.lookForSource()
+
+    def setEnvironment(self):
+        home_path = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../.."))
+        fusesoc_confing_path = home_path + "/.config/fusesoc/fusesoc.conf"
+        fusesoc_conf_file = open(fusesoc_confing_path, "r")
+        data_path = []
+
+        for line in fusesoc_conf_file:
+            data_path.append(line)
+
+        self.system_path = "/" + str(data_path[1]).split(sep="/", maxsplit=1).pop()[:-1]
+        self.core_path = "/" + str(data_path[2]).split(sep="/", maxsplit=1).pop()[:-1]
+
+
+
+    def lookForSource(self):
+        core_exist = False
+        source_exist = False
+        iter_for_inst_rank_clear = 0
+        for source in self.name:
+            # Look for source file
+            print(self.core_path)
+            for file in os.listdir(self.core_path):
+                if file == source:
+                    core_exist = True
+                    break
+                else:
+                    core_exist = False
+
+
+            if core_exist:
+                # .v file -> use it immediately
+                # .core file -> look for repositories
+                for file in os.listdir(self.core_path + "/" + source):
+                    if file.endswith(".v"):
+                        self.source_list.append(self.core_path + "/" + source + "/" + source + ".v")
+                        source_exist = True
+                    elif file.endswith(".core"):
+                        topgen.repo_clone.Repo_clone(self.core_path + "/" + source + "/" + file)
+                        for element in topgen.repo_clone.Repo_clone.source_list:
+                            self.source_list.append(element)
+                        topgen.repo_clone.Repo_clone.source_list = []
+                        source_exist = True
             else:
-                core_exist = False
+                print(source + ": No such core.")
+
+            if not source_exist:
+                print(source + ": Neither .core file nor .v files exist!")
 
 
-        if core_exist:
-            # .v file -> use it immediately
-            # .core file -> look for repositories
-            for file in os.listdir("/home/murai/openrisc/orpsoc-cores-ng/cores/" + source):
-                if file.endswith(".v"):
-                    source_list.append("/home/murai/openrisc/orpsoc-cores-ng/cores/" + source + "/" + source + ".v")
-                    source_exist = True
-                elif file.endswith(".core"):
-                    topgen.repo_clone.Repo_clone("/home/murai/openrisc/orpsoc-cores-ng/cores/" + source + "/" + file)
-                    for element in topgen.repo_clone.Repo_clone.source_list:
-                        source_list.append(element)
-                    topgen.repo_clone.Repo_clone.source_list = []
-                    source_exist = True
-        else:
-            print(source + ": No such core.")
+            #Delete the parameters if we couldn't find the source
+            if not source_exist or not core_exist:
+                del topgen.handleConfFile.instantiation_name[iter_for_inst_rank_clear]
+                del topgen.handleConfFile.rank[iter_for_inst_rank_clear]
 
-        if not source_exist:
-            print(source + ": Neither .core file nor .v files exist!")
+            iter_for_inst_rank_clear += 1
 
-
-        #Delete the parameters if we couldn't find the source
-        if not source_exist or not core_exist:
-            del topgen.handleConfFile.instantiation_name[iter_for_inst_rank_clear]
-            del topgen.handleConfFile.rank[iter_for_inst_rank_clear]
-
-        iter_for_inst_rank_clear += 1
-
-    return source_list
 
 
 def findTopGen(tr):
@@ -141,19 +166,21 @@ def findTopGen(tr):
         return findTopGen(child)
 
 
-def top_gen_main():
-    source_list = []
+def top_gen_main(top_gen_conf_path):
+    top_gen_output_path = top_gen_conf_path.split("/")[:-1]
+    top_modul_name = input("Give the top modul's name (with extension): ")
     output = ""
     # Open configuration file
-    topgen.handleConfFile.processConfFile("/home/murai/openrisc/orpsoc-cores-ng/systems/logsys_spartan_6/top_generating/top.txt")
-    # # Look for source files
-    source_list = lookForSource(topgen.handleConfFile.module_name)
-    print(source_list)
+    topgen.handleConfFile.processConfFile(top_gen_conf_path)
+    # Set the environment and look for source files
+    sourcePreparations = SourcePreparations(topgen.handleConfFile.module_name)
     # Instantiation from the source list
-    for source in range(len(source_list)):
-        codeParser = VerilogCodeParser(filelist=[source_list[source]])
+    for source in range(len(sourcePreparations.source_list)):
+        codeParser = VerilogCodeParser(filelist=[sourcePreparations.source_list[source]])
         sAst = codeParser.parse()
         moduleNode = findTopGen(sAst)
         output += moduleNode.instantiate(topgen.handleConfFile.instantiation_name[source], topgen.handleConfFile.rank[source])
     # Create the top.v file
-    writeToFile(output)
+    writeToFile(output, top_gen_output_path, top_modul_name)
+
+top_gen_main("/home/murai/openrisc/orpsoc-cores-ng/systems/logsys_spartan_6/top_generating/top.txt")

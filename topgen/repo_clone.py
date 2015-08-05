@@ -2,15 +2,13 @@
 @author: janosmurai
 '''
 
-import tarfile
-import urllib
-import zipfile
 from git import Repo
 import os
 import sys
 import shutil
 import re
 from fusesoc.utils import Launcher
+import fusesoc.provider.url
 
 ##########################################################################
 # Not working if the top module's name is not equal with the core's name #
@@ -81,24 +79,25 @@ class Repo_clone:
             else:
                 print("Unknown name for provider")
         else:
-            print("No source to download")
+            print(core_file + ": No source to download")
             return
 
+    # IDK if it is a good idea to work in th /tmp folder...
     def cloneGitHub(self):
-        for file in os.listdir("/home/murai/openrisc/top_gen_fusesoc/git_test/"):
+        for file in os.listdir("/tmp/top_gen_fusesoc/git_test/"):
             if file == Repo_clone.repo:
-                shutil.rmtree("/home/murai/openrisc/top_gen_fusesoc/git_test/{dir}".format(dir=Repo_clone.repo))
+                shutil.rmtree("/tmp/top_gen_fusesoc/git_test/{dir}".format(dir=Repo_clone.repo))
 
 
         try:
             Repo.clone_from("https://github.com/{user}/{repo}".format(user=Repo_clone.user, repo=Repo_clone.repo),
-                            "/home/murai/openrisc/top_gen_fusesoc/git_test/{dir}".format(dir=Repo_clone.repo))
+                            "/tmp/top_gen_fusesoc/git_test/{dir}".format(dir=Repo_clone.repo))
         except:
             is_manual_url = input("We couldn't find the source files defined in the " + Repo_clone.repo + " core file.\n Would you like to add the URL manually? (y/n)\n")
             if re.match(r"[yY][eE][sS]", is_manual_url) or is_manual_url == "y":
                 manual_url = input("Please add the URL: ")
                 try:
-                    Repo.clone_from(manual_url, "/home/murai/openrisc/top_gen_fusesoc/git_test/{dir}".format(dir=Repo_clone.repo))
+                    Repo.clone_from(manual_url, "/tmp/top_gen_fusesoc/git_test/{dir}".format(dir=Repo_clone.repo))
                 except:
                     print("We couldn't find the source files.\nThe core will be skipped")
             else:
@@ -106,7 +105,7 @@ class Repo_clone:
 
 
         # Add files to source list
-        for root, dirs, files in os.walk("/home/murai/openrisc/top_gen_fusesoc/git_test/{dir}".format(dir=Repo_clone.repo), topdown=False, onerror=None, followlinks=False):
+        for root, dirs, files in os.walk("/tmp/top_gen_fusesoc/git_test/{dir}".format(dir=Repo_clone.repo), topdown=False, onerror=None, followlinks=False):
             for file in files:
                 if file == (self.repo + ".v"):
                     self.source_list.append(os.path.join(root, file))
@@ -123,7 +122,7 @@ class Repo_clone:
                              '--username', 'orpsoc',
                              '--password', 'orpsoc',
                              repo_path,
-                             "/home/murai/openrisc/top_gen_fusesoc/git_test/{dir}".format(dir=self.repo_name)]).run()
+                             "/tmp/top_gen_fusesoc/git_test/{dir}".format(dir=self.repo_name)]).run()
         except:
             is_manual_url = input("We couldn't find the source files defined in the " + self.repo_name + " core file.\n Would you like to add the URL manually? (y/n)\n")
             if re.match(r"[yY][eE][sS]", is_manual_url) or is_manual_url == "y":
@@ -134,7 +133,7 @@ class Repo_clone:
                              '--username', 'orpsoc',
                              '--password', 'orpsoc',
                              manual_url,
-                             "/home/murai/openrisc/top_gen_fusesoc/git_test/{dir}".format(dir=self.repo_name)]).run()
+                             "/tmp/top_gen_fusesoc/git_test/{dir}".format(dir=self.repo_name)]).run()
                 except:
                     print("We couldn't find the source files.\nThe core will be skipped.")
             else:
@@ -142,49 +141,13 @@ class Repo_clone:
 
 
         # Add files to source list
-        for root, dirs, files in os.walk("/home/murai/openrisc/top_gen_fusesoc/git_test/{dir}".format(dir=self.repo_name), topdown=False, onerror=None, followlinks=False):
+        for root, dirs, files in os.walk("/tmp/top_gen_fusesoc/git_test/{dir}".format(dir=self.repo_name), topdown=False, onerror=None, followlinks=False):
             for file in files:
                 if file == (self.repo_name + ".v"):
                     self.source_list.append(os.path.join(root, file))
                     print(file)
 
     def cloneFromURL(self):
-        try:
-            (filename, headers) = urllib.urlretrieve(self.url)
-        except urllib.URLError:
-            raise
-        except urllib.HTTPError:
-            raise
 
-        url = self.url.split("/")
-        source_name = url.pop()
-        url.pop()
-        path_to_copy = "/home/murai/openrisc/top_gen_fusesoc/git_test/{dir}".format(dir=url.pop())
-        if not os.path.exists(path_to_copy):
-            os.makedirs(path_to_copy)
-            os.makedirs(path_to_copy + "/rtl")
-        path_to_copy += "/rtl"
-
-        if self.filetype == 'tar':
-            # Source is *.tar
-            t = tarfile.open(filename)
-            t.extractall(path_to_copy)
-        elif self.filetype == 'zip':
-            # Source is *.zip
-            with zipfile.ZipFile(filename, "r") as z:
-                z.extractall(path_to_copy)
-        elif self.filetype == 'simple':
-            # Source is *.v
-            shutil.copy2(filename, path_to_copy)
-        else:
-            # Unknown file type
-            raise RuntimeError("Unknown file type '" + self.filetype + "' in [provider] section")
-
-        #TODO: Ha nem találja lehessen újat megadni, vagy skippelni a core fájlt
-
-        # Add files to source list
-        for root, dirs, files in os.walk(path_to_copy, topdown=False, onerror=None, followlinks=False):
-            for file in files:
-                if file == source_name:
-                    self.source_list.append(os.path.join(root, file))
-                    print(file)
+        print("Downloading from the given URL is not working yet.\n" + \
+              "Please download the source manually and in the .core file set the src_files equal with them.")
