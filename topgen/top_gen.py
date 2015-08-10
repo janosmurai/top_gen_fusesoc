@@ -100,7 +100,7 @@ class SourcePreparations(object):
         self.lookForSource()
 
     def setEnvironment(self):
-        home_path = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../.."))
+        home_path = os.environ["HOME"]
         fusesoc_confing_path = home_path + "/.config/fusesoc/fusesoc.conf"
         fusesoc_conf_file = open(fusesoc_confing_path, "r")
         data_path = []
