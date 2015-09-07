@@ -4,11 +4,10 @@
 
 from git import Repo
 import os
-import sys
 import shutil
 import re
+from fusesoc.provider.url import ProviderURL
 from fusesoc.utils import Launcher
-import fusesoc.provider.url
 
 ##########################################################################
 # Not working if the top module's name is not equal with the core's name #
@@ -30,8 +29,14 @@ class Repo_clone:
     source_list = []
     source_to_download = False
 
-    def __init__(self, core_file):
+    def __init__(self, core_file, top_gen_output_path):
+        self.output_path = ""
+        for element in top_gen_output_path:
+            self.output_path += element + "/"
+
+        print("output path: " + self.output_path)
         self.openCoreFile(core_file)
+
 
     def openCoreFile(self, core_file):
         provider = False
@@ -75,29 +80,28 @@ class Repo_clone:
                 Repo_clone.cloneGitHub(self)
             elif Repo_clone.name == "url":
                 # Repository is available from other source
-                Repo_clone.cloneFromURL(self)
+                Repo_clone.cloneFromURL(self, core_file)
             else:
                 print("Unknown name for provider")
         else:
             print(core_file + ": No source to download")
             return
 
-    # IDK if it is a good idea to work in th /tmp folder...
     def cloneGitHub(self):
-        for file in os.listdir("/tmp/top_gen_fusesoc/git_test/"):
+        if not os.path.isdir(self.output_path + "rtl"):
+            os.mkdir(self.output_path + "rtl")
+        for file in os.listdir(self.output_path + "rtl"):
             if file == Repo_clone.repo:
-                shutil.rmtree("/tmp/top_gen_fusesoc/git_test/{dir}".format(dir=Repo_clone.repo))
-
-
+                shutil.rmtree(self.output_path + "rtl/" + Repo_clone.repo)
         try:
             Repo.clone_from("https://github.com/{user}/{repo}".format(user=Repo_clone.user, repo=Repo_clone.repo),
-                            "/tmp/top_gen_fusesoc/git_test/{dir}".format(dir=Repo_clone.repo))
+                            self.output_path + "rtl/" + Repo_clone.repo)
         except:
             is_manual_url = input("We couldn't find the source files defined in the " + Repo_clone.repo + " core file.\n Would you like to add the URL manually? (y/n)\n")
             if re.match(r"[yY][eE][sS]", is_manual_url) or is_manual_url == "y":
                 manual_url = input("Please add the URL: ")
                 try:
-                    Repo.clone_from(manual_url, "/tmp/top_gen_fusesoc/git_test/{dir}".format(dir=Repo_clone.repo))
+                    Repo.clone_from(manual_url, self.output_path + "rtl" + Repo_clone.repo)
                 except:
                     print("We couldn't find the source files.\nThe core will be skipped")
             else:
@@ -105,7 +109,7 @@ class Repo_clone:
 
 
         # Add files to source list
-        for root, dirs, files in os.walk("/tmp/top_gen_fusesoc/git_test/{dir}".format(dir=Repo_clone.repo), topdown=False, onerror=None, followlinks=False):
+        for root, dirs, files in os.walk(self.output_path + "rtl/" + Repo_clone.repo, topdown=False, onerror=None, followlinks=False):
             for file in files:
                 if file == (self.repo + ".v"):
                     self.source_list.append(os.path.join(root, file))
@@ -122,7 +126,7 @@ class Repo_clone:
                              '--username', 'orpsoc',
                              '--password', 'orpsoc',
                              repo_path,
-                             "/tmp/top_gen_fusesoc/git_test/{dir}".format(dir=self.repo_name)]).run()
+                             self.output_path + "rtl/" + self.repo_name]).run()
         except:
             is_manual_url = input("We couldn't find the source files defined in the " + self.repo_name + " core file.\n Would you like to add the URL manually? (y/n)\n")
             if re.match(r"[yY][eE][sS]", is_manual_url) or is_manual_url == "y":
@@ -133,7 +137,7 @@ class Repo_clone:
                              '--username', 'orpsoc',
                              '--password', 'orpsoc',
                              manual_url,
-                             "/tmp/top_gen_fusesoc/git_test/{dir}".format(dir=self.repo_name)]).run()
+                             self.output_path + "rtl/" + self.repo_name]).run()
                 except:
                     print("We couldn't find the source files.\nThe core will be skipped.")
             else:
@@ -141,13 +145,24 @@ class Repo_clone:
 
 
         # Add files to source list
-        for root, dirs, files in os.walk("/tmp/top_gen_fusesoc/git_test/{dir}".format(dir=self.repo_name), topdown=False, onerror=None, followlinks=False):
+        for root, dirs, files in os.walk(self.output_path + "rtl" + self.repo_name, topdown=False, onerror=None, followlinks=False):
             for file in files:
                 if file == (self.repo_name + ".v"):
                     self.source_list.append(os.path.join(root, file))
                     print(file)
 
-    def cloneFromURL(self):
+    def cloneFromURL(self, core_file):
+        core_name = str(core_file).split(".")[0]
+        config = {"url": self.url, "filetype": self.filetype}
 
-        print("Downloading from the given URL is not working yet.\n" + \
+        providerURL = ProviderURL(core_name, config, "", "/home/murai/openrisc/top_gen_fusesoc/git_test/{dir}".format(dir=core_name))
+        try:
+            providerURL.fetch()
+        except:
+            print("Downloading from the given URL is not working yet.\n" + \
               "Please download the source manually and in the .core file set the src_files equal with them.")
+
+
+
+
+

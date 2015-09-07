@@ -10,15 +10,18 @@ from pyverilog.vparser.parser import VerilogCodeParser
 from pyverilog.vparser.ast import ModuleDef, Parameter, Identifier, ParamArg, PortArg, Instance
 from pyverilog.ast_code_generator.codegen import ASTCodeGenerator
 
+
 class IPNode:
     parameters = []
     ports = []
     name = ""
     connections_to_file = []
     val = ""
+    output_path = ""
 
-    def __init__(self, moduleNode):
+    def __init__(self, moduleNode, top_gen_output_path):
 
+        self.top_gen_output_path = top_gen_output_path
         self.name = moduleNode.name
         self.portlist = []
         self.paramlist = []
@@ -28,10 +31,12 @@ class IPNode:
             #The port does not have first attribute, but it still contains the name.
             except AttributeError:
                 self.portlist.append(PortArg(Identifier(port.name), Identifier(port.name)))
+
         for item in moduleNode.paramlist.params:
             self.findParameters(item, self.parameters)
         for item in moduleNode.items:
             self.findParameters(item, self.parameters)
+
 
     def findParameters(self, node, lst):
         if isinstance(node, Parameter):
@@ -42,11 +47,14 @@ class IPNode:
             lst.append((node.name, val))
         for child in node.children():
             self.findParameters(child, lst)
+
         return lst
 
     def instantiate(self, instanceName, rank):
         val = ""
         inst = Instance(self.name, instanceName, self.portlist, self.paramlist)
+
+        self.set_core_params(inst.parameterlist)
 
         for line in inst.portlist:
             if (line.argname.name != "wb_clk") & (line.argname.name != "wb_rst") & line.argname.name.startswith("wb"):
@@ -72,6 +80,35 @@ class IPNode:
         print(val)
         return val
 
+    def set_core_params(self, parameterlist):
+        output_path = ""
+        for element in self.top_gen_output_path:
+            output_path += element + "/"
+
+        f = open(output_path + self.name + "_paramlist", "w")
+        for param in parameterlist:
+            isnumeric = False
+            for num in range(10):
+                if param.argname.value.startswith(str(num)):
+                    f.write("." + param.paramname.name + "(" + param.argname.value + "),\n")
+                    isnumeric = True
+
+            if not isnumeric:
+                f.write("." + param.paramname.name + "(\"" + param.argname.value + "\"),\n")
+
+        f.close()
+        print("\nPlease fill up the " + self.name + " cores parameter list, which is available in the output folder.")
+        print("\nFirst the parameter list is filled up with the default values.")
+        input("\nIf the list is ready, please press enter!")
+
+        f = open(output_path + self.name + "_paramlist", "r")
+        for line in f:
+            param_type = line.split("(")[0][1:]
+            param_value = line.split("(")[1][:-3].replace("\"", "")
+            for param in parameterlist:
+                if param_type.startswith(str(param.paramname.name)):
+                    param.argname.value = param_value
+        f.close()
 
 
 def writeToFile(output, top_gen_output_path, top_modul_name):
@@ -94,8 +131,9 @@ class SourcePreparations(object):
     core_path = ""
     source_list = []
 
-    def __init__(self, name):
+    def __init__(self, name, top_gen_output_path):
         self.name = name
+        self.top_gen_output_path = top_gen_output_path
         self.setEnvironment()
         self.lookForSource()
 
@@ -136,7 +174,7 @@ class SourcePreparations(object):
                         self.source_list.append(self.core_path + "/" + source + "/" + source + ".v")
                         source_exist = True
                     elif file.endswith(".core"):
-                        topgen.repo_clone.Repo_clone(self.core_path + "/" + source + "/" + file)
+                        topgen.repo_clone.Repo_clone(self.core_path + "/" + source + "/" + file, self.top_gen_output_path)
                         for element in topgen.repo_clone.Repo_clone.source_list:
                             self.source_list.append(element)
                         topgen.repo_clone.Repo_clone.source_list = []
@@ -157,28 +195,28 @@ class SourcePreparations(object):
 
 
 
-def findTopGen(tr):
+def findTopGen(tr, top_gen_output_path):
     # Find modul nodes
     if isinstance(tr, ModuleDef):
-        moduleNode = IPNode(tr)
+        moduleNode = IPNode(tr, top_gen_output_path)
         return moduleNode
     for child in tr.children():
-        return findTopGen(child)
+        return findTopGen(child, top_gen_output_path)
 
 
 def top_gen_main(top_gen_conf_path):
     top_gen_output_path = top_gen_conf_path.split("/")[:-1]
-    top_modul_name = input("Give the top modul's name (with extension): ")
+    top_modul_name = "top.v" #input("Give the top modul's name (with extension): ")
     output = ""
     # Open configuration file
     topgen.handleConfFile.processConfFile(top_gen_conf_path)
     # Set the environment and look for source files
-    sourcePreparations = SourcePreparations(topgen.handleConfFile.module_name)
+    sourcePreparations = SourcePreparations(topgen.handleConfFile.module_name, top_gen_output_path)
     # Instantiation from the source list
     for source in range(len(sourcePreparations.source_list)):
         codeParser = VerilogCodeParser(filelist=[sourcePreparations.source_list[source]])
         sAst = codeParser.parse()
-        moduleNode = findTopGen(sAst)
+        moduleNode = findTopGen(sAst, top_gen_output_path)
         output += moduleNode.instantiate(topgen.handleConfFile.instantiation_name[source], topgen.handleConfFile.rank[source])
     # Create the top.v file
     writeToFile(output, top_gen_output_path, top_modul_name)
