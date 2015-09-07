@@ -51,7 +51,6 @@ class IPNode:
         return lst
 
     def instantiate(self, instanceName, rank):
-        val = ""
         inst = Instance(self.name, instanceName, self.portlist, self.paramlist)
 
         self.set_core_params(inst.parameterlist)
@@ -79,6 +78,7 @@ class IPNode:
         print(rank)
         print(val)
         return val
+
 
     def set_core_params(self, parameterlist):
         output_path = ""
@@ -111,6 +111,40 @@ class IPNode:
         f.close()
 
 
+def set_comment_field():
+    description_comment = ""
+    print("Do you want to add a description comment?\n")
+    user_in = input("If yes, please add the path to the appropriate file, if no just press enter!\n")
+    if not user_in == "":
+        f = open(user_in, "r")
+        description_comment = f.read()
+        f.close()
+    return description_comment
+
+def set_top_modul_params():
+    top_modul_param_list = []
+    top_modul_param_list_out = []
+    top_modul_name = input("Please add the top module's name, then press enter!\n")
+    print("Do you want to add any parameters for the top modul?\n")
+    print("In case of yes, please add the parameters as follows: param1 = value1; param2 = value2; etc...\n")
+    user_in = input("In case of no, just press enter!\n")
+    if user_in == "":
+        top_modul_param_list_out.append("module " + top_modul_name + " (")
+    else:
+        top_modul_param_list.append("module " + top_modul_name + " #(\n")
+        for element in user_in.split(";"):
+            top_modul_param_list.append(element)
+        for param in top_modul_param_list:
+            param_to_string = str(param)
+            if not param_to_string.startswith("module"):
+                top_modul_param_list_out.append("\tparameter\t" + param + ",\n")
+            else:
+                top_modul_param_list_out.append(param)
+        top_modul_param_list_out.pop()
+        top_modul_param_list_out[len(top_modul_param_list_out) -1 ] = str(top_modul_param_list_out[len(top_modul_param_list_out) - 1]).replace(",","")
+        top_modul_param_list_out.append(")(\n")
+    return top_modul_param_list_out
+
 def writeToFile(output, top_gen_output_path, top_modul_name):
     output_path = ""
     for element in top_gen_output_path:
@@ -124,6 +158,7 @@ def writeToFile(output, top_gen_output_path, top_modul_name):
     f = open(output_path + top_modul_name, 'a')
     f.write(output)
     f.close()
+
 
 class SourcePreparations(object):
 
@@ -206,8 +241,9 @@ def findTopGen(tr, top_gen_output_path):
 
 def top_gen_main(top_gen_conf_path):
     top_gen_output_path = top_gen_conf_path.split("/")[:-1]
-    top_modul_name = "top.v" #input("Give the top modul's name (with extension): ")
-    output = ""
+    top_modul_name = "top.v" #TODO: input("Give the top modul's name (with extension): ")
+    core_inst = ""
+    top_modul_param_list = []
     # Open configuration file
     topgen.handleConfFile.processConfFile(top_gen_conf_path)
     # Set the environment and look for source files
@@ -217,8 +253,18 @@ def top_gen_main(top_gen_conf_path):
         codeParser = VerilogCodeParser(filelist=[sourcePreparations.source_list[source]])
         sAst = codeParser.parse()
         moduleNode = findTopGen(sAst, top_gen_output_path)
-        output += moduleNode.instantiate(topgen.handleConfFile.instantiation_name[source], topgen.handleConfFile.rank[source])
+        core_inst += moduleNode.instantiate(topgen.handleConfFile.instantiation_name[source], topgen.handleConfFile.rank[source])
+
+    # Set the comment if any
+    output = set_comment_field()
+
+    # Set the top module's parameters if any
+    top_modul_param_list = set_top_modul_params()
+    for param in top_modul_param_list:
+        output += param
+
     # Create the top.v file
+    output += core_inst
     writeToFile(output, top_gen_output_path, top_modul_name)
 
-top_gen_main("/home/murai/openrisc/orpsoc-cores-ng/systems/logsys_spartan_6/top_generating/top.txt")
+top_gen_main("/home/murai/openrisc/orpsoc-cores-ng/systems/atlys/top_generating/atlys_topgen")
