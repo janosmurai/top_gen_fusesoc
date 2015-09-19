@@ -9,6 +9,7 @@ import topgen.repo_clone
 from pyverilog.vparser.parser import VerilogCodeParser
 from pyverilog.vparser.ast import ModuleDef, Parameter, Identifier, ParamArg, PortArg, Instance
 from pyverilog.ast_code_generator.codegen import ASTCodeGenerator
+import topgen.automatic_mode_functions
 
 
 class IPNode:
@@ -99,7 +100,7 @@ class IPNode:
         f.close()
         print("\nPlease fill up the " + self.name + " cores parameter list, which is available in the output folder.")
         print("\nFirst the parameter list is filled up with the default values.")
-        input("\nIf the list is ready, please press enter!")
+        input("\nIf the list is ready, please press enter!\n")
 
         f = open(output_path + self.name + "_paramlist", "r")
         for line in f:
@@ -111,28 +112,40 @@ class IPNode:
         f.close()
 
 
-def set_comment_field():
+def set_comment_field(is_interactive, auto_mode_param):
     description_comment = ""
-    print("Do you want to add a description comment?\n")
-    user_in = input("If yes, please add the path to the appropriate file, if no just press enter!\n")
+    if is_interactive == "I":
+        print("Do you want to add a description comment?\n")
+        user_in = input("If yes, please add the path to the appropriate file, if no just press enter!\n")
+    else:
+        user_in = auto_mode_param["Description comment"]
+        user_in = str(user_in).replace("\n", "")
+        user_in = user_in.replace(" ", "")
     if not user_in == "":
         f = open(user_in, "r")
         description_comment = f.read()
         f.close()
     return description_comment
 
-def set_top_modul_params():
+def set_top_modul_params(is_interactive, auto_mode_param):
     top_modul_param_list = []
     top_modul_param_list_out = []
-    top_modul_name = input("Please add the top module's name, then press enter!\n")
-    print("Do you want to add any parameters for the top modul?\n")
-    print("In case of yes, please add the parameters as follows: param1 = value1; param2 = value2; etc...\n")
-    user_in = input("In case of no, just press enter!\n")
-    if user_in == "":
-        top_modul_param_list_out.append("module " + top_modul_name + " (")
+    top_module_param_input = ""
+    if is_interactive == "I":
+        top_modul_instantiation_name = input("Please add the top module's name, then press enter!\n")
+        print("Do you want to add any parameters for the top modul?\n")
+        print("In case of yes, please add the parameters as follows: param1 = value1; param2 = value2; etc...\n")
+        top_module_param_input = input("In case of no, just press enter!\n")
     else:
-        top_modul_param_list.append("module " + top_modul_name + " #(\n")
-        for element in user_in.split(";"):
+        top_modul_instantiation_name = auto_mode_param["Top module's instantiation name"]
+        top_modul_instantiation_name = str(top_modul_instantiation_name).replace(" ", "")
+        top_module_param_input = auto_mode_param["Top module's parameters"]
+        top_module_param_input = str(top_module_param_input).replace(" ", "")
+    if top_module_param_input == "":
+        top_modul_param_list_out.append("module " + top_modul_instantiation_name + " (")
+    else:
+        top_modul_param_list.append("module " + top_modul_instantiation_name + "#(\n")
+        for element in top_module_param_input.split(";"):
             top_modul_param_list.append(element)
         for param in top_modul_param_list:
             param_to_string = str(param)
@@ -141,9 +154,25 @@ def set_top_modul_params():
             else:
                 top_modul_param_list_out.append(param)
         top_modul_param_list_out.pop()
-        top_modul_param_list_out[len(top_modul_param_list_out) -1 ] = str(top_modul_param_list_out[len(top_modul_param_list_out) - 1]).replace(",","")
+        top_modul_param_list_out[len(top_modul_param_list_out) - 1] = str(top_modul_param_list_out[len(top_modul_param_list_out) - 1]).replace(",","")
         top_modul_param_list_out.append(")(\n")
     return top_modul_param_list_out
+
+def set_includes(is_interactive, auto_mode_param):
+    if is_interactive == "I":
+        print("If you would like to include core files, please type the name, separated with a semicolon, then press enter\n")
+        print("(For example: core1.v; core2.v)\n")
+        top_module_include = input("If you would not like to include anything, please press enter!\n")
+    else:
+        top_module_include = auto_mode_param["Files to include"]
+    top_module_include = top_module_include.replace(" ", "")
+    top_module_include = top_module_include.replace("\n", "")
+    top_module_include_separated = top_module_include.split(";")
+    top_module_include_list = []
+    for element in top_module_include_separated:
+        top_module_include_list.append("`include \"" + element + "\"\n")
+    return top_module_include_list
+
 
 def writeToFile(output, top_gen_output_path, top_modul_name):
     output_path = ""
@@ -166,9 +195,10 @@ class SourcePreparations(object):
     core_path = ""
     source_list = []
 
-    def __init__(self, name, top_gen_output_path):
+    def __init__(self, name, top_gen_output_path, is_interactive):
         self.name = name
         self.top_gen_output_path = top_gen_output_path
+        self.is_interactive = is_interactive
         self.setEnvironment()
         self.lookForSource()
 
@@ -209,7 +239,7 @@ class SourcePreparations(object):
                         self.source_list.append(self.core_path + "/" + source + "/" + source + ".v")
                         source_exist = True
                     elif file.endswith(".core"):
-                        topgen.repo_clone.Repo_clone(self.core_path + "/" + source + "/" + file, self.top_gen_output_path)
+                        topgen.repo_clone.Repo_clone(self.core_path + "/" + source + "/" + file, self.top_gen_output_path, self.is_interactive)
                         for element in topgen.repo_clone.Repo_clone.source_list:
                             self.source_list.append(element)
                         topgen.repo_clone.Repo_clone.source_list = []
@@ -239,15 +269,26 @@ def findTopGen(tr, top_gen_output_path):
         return findTopGen(child, top_gen_output_path)
 
 
-def top_gen_main(top_gen_conf_path):
-    top_gen_output_path = top_gen_conf_path.split("/")[:-1]
-    top_modul_name = "top.v" #TODO: input("Give the top modul's name (with extension): ")
+def top_gen_main():
+    auto_mode_params = {}
     core_inst = ""
-    top_modul_param_list = []
+    top_gen_conf_path = "/home/murai/openrisc/orpsoc-cores-ng/systems/atlys/top_generating/atlys_topgen" #TODO: input("Give the output folder for the top generation!\n")
+    top_gen_output_path = top_gen_conf_path.split("/")[:-1]
+
+    is_interactive = input("Interactive (I) or automatic(A) mode?\n")
+    if is_interactive == "I":
+        top_modul_file_name = input("Give the top module's filename (with extension): \n")
+    else:
+        auto_mode_param_file_path = topgen.automatic_mode_functions.create_auto_mode_param_file(top_gen_output_path)
+        auto_mode_params = topgen.automatic_mode_functions.handle_conf_file(auto_mode_param_file_path)
+        top_modul_file_name = auto_mode_params["Top module's filename"]
+        top_modul_file_name = str(top_modul_file_name).replace(" ", "")
+        top_modul_file_name = str(top_modul_file_name).replace("\n", "")
+
     # Open configuration file
     topgen.handleConfFile.processConfFile(top_gen_conf_path)
     # Set the environment and look for source files
-    sourcePreparations = SourcePreparations(topgen.handleConfFile.module_name, top_gen_output_path)
+    sourcePreparations = SourcePreparations(topgen.handleConfFile.module_name, top_gen_output_path, is_interactive)
     # Instantiation from the source list
     for source in range(len(sourcePreparations.source_list)):
         codeParser = VerilogCodeParser(filelist=[sourcePreparations.source_list[source]])
@@ -256,15 +297,20 @@ def top_gen_main(top_gen_conf_path):
         core_inst += moduleNode.instantiate(topgen.handleConfFile.instantiation_name[source], topgen.handleConfFile.rank[source])
 
     # Set the comment if any
-    output = set_comment_field()
+    output = set_comment_field(is_interactive, auto_mode_params)
+
+    # Set the top module's includes if any
+    top_modul_include_list = set_includes(is_interactive, auto_mode_params)
+    for element in top_modul_include_list:
+        output += element
 
     # Set the top module's parameters if any
-    top_modul_param_list = set_top_modul_params()
+    top_modul_param_list = set_top_modul_params(is_interactive, auto_mode_params)
     for param in top_modul_param_list:
         output += param
 
     # Create the top.v file
     output += core_inst
-    writeToFile(output, top_gen_output_path, top_modul_name)
+    writeToFile(output, top_gen_output_path, top_modul_file_name)
 
-top_gen_main("/home/murai/openrisc/orpsoc-cores-ng/systems/atlys/top_generating/atlys_topgen")
+top_gen_main()

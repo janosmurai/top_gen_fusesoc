@@ -29,8 +29,10 @@ class Repo_clone:
     source_list = []
     source_to_download = False
 
-    def __init__(self, core_file, top_gen_output_path):
+    def __init__(self, core_file, top_gen_output_path, is_interactive):
+        self.is_interactive = is_interactive
         self.output_path = ""
+        self.is_manual_url = ""
         for element in top_gen_output_path:
             self.output_path += element + "/"
 
@@ -97,8 +99,13 @@ class Repo_clone:
             Repo.clone_from("https://github.com/{user}/{repo}".format(user=Repo_clone.user, repo=Repo_clone.repo),
                             self.output_path + "rtl/" + Repo_clone.repo)
         except:
-            is_manual_url = input("We couldn't find the source files defined in the " + Repo_clone.repo + " core file.\n Would you like to add the URL manually? (y/n)\n")
-            if re.match(r"[yY][eE][sS]", is_manual_url) or is_manual_url == "y":
+            self.is_manual_url = input("We couldn't find the source files defined in the " + Repo_clone.repo + " core file.\n Would you like to add the URL manually? (y/n)\n")
+
+            # No interaction with the user, if auto mode is on
+            if self.is_interactive == "A":
+                self.is_manual_url = "no"
+
+            if re.match(r"[yY][eE][sS]", self.is_manual_url) or self.is_manual_url == "y":
                 manual_url = input("Please add the URL: ")
                 try:
                     Repo.clone_from(manual_url, self.output_path + "rtl" + Repo_clone.repo)
@@ -128,8 +135,13 @@ class Repo_clone:
                              repo_path,
                              self.output_path + "rtl/" + self.repo_name]).run()
         except:
-            is_manual_url = input("We couldn't find the source files defined in the " + self.repo_name + " core file.\n Would you like to add the URL manually? (y/n)\n")
-            if re.match(r"[yY][eE][sS]", is_manual_url) or is_manual_url == "y":
+            self.is_manual_url = input("We couldn't find the source files defined in the " + self.repo_name + " core file.\n Would you like to add the URL manually? (y/n)\n")
+
+            # No interaction with the user, if auto mode is on
+            if self.is_interactive == "A":
+                self.is_manual_url = "no"
+
+            if re.match(r"[yY][eE][sS]", self.is_manual_url) or self.is_manual_url == "y":
                 manual_url = input("Please add the URL: ")
                 try:
                     Launcher('svn', ['co', '-q', '--no-auth-cache',
